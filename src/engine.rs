@@ -61,19 +61,25 @@ fn evaluator_nn() -> FeedForward {
 }
 
 #[derive(Serialize, Deserialize)]
+pub enum PruningType {
+    None,
+    AlphaBeta,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Engine {
     search_depth: u8, // in ply
-    uses_pruning: bool,
+    pruning_type: PruningType,
     eval_nn: FeedForward,
 }
 
 impl Engine {
     /// Create a new engine with the given search depth and an untrained evaluator
     /// neural network.
-    pub fn new(search_depth: u8, uses_pruning: bool) -> Engine {
+    pub fn new(search_depth: u8, pruning_type: PruningType) -> Engine {
         Engine {
             search_depth: search_depth,
-            uses_pruning: uses_pruning,
+            pruning_type: pruning_type,
             eval_nn: evaluator_nn(),
         }
     }
@@ -104,7 +110,7 @@ impl Engine {
     }
 
     /// Return the evaluation of a non-terminal node by the negamax algorithm.
-    fn evaluate_nonterminal(&mut self, board: &Board, depth: u8) -> f64 {
+    fn evaluate_nonterminal_unpruned(&mut self, board: &Board, depth: u8) -> f64 {
         if depth == 0 || board.status() != BoardStatus::Ongoing {
             return self.evaluate_terminal(board)
                 * if board.side_to_move() == Color::White {
@@ -124,19 +130,64 @@ impl Engine {
         value
     }
 
-    /// Return the evaluation of a non-terminal node by the negamax algorithm, with
-    /// various pruning algorithms applied.
-    fn evaluate_nonterminal_pruned(&mut self, board: &Board, depth: u8) -> f64 {
-        0.0
+    /// Return the evaluation of a non-terminal node by the minimax algorithm, with
+    /// alpha-beta pruning.
+    fn evaluate_nonterminal_ab_pruned(&mut self, board: &Board, depth: u8, alpha: &mut f64, beta: &mut f64) -> f64 {
+        if depth == 0 || board.status() != BoardStatus::Ongoing {
+            return self.evaluate_terminal(board)
+                * if board.side_to_move() == Color::White {
+                    1.0
+                } else {
+                    -1.0
+                };
+        }
+        
+        if board.side_to_move() == Color::White {
+            let mut value = std::f64::NEG_INFINITY;
+            for m in MoveGen::new_legal(board) {
+                let mut temp_board = board.clone();
+                board.make_move(m, &mut temp_board);
+
+                value = value.max(self.evaluate_nonterminal_ab_pruned(&temp_board, depth - 1, beta, alpha));
+                if value >= *beta {
+                    break;
+                }
+                *alpha = alpha.max(value);
+            }
+
+            return value;
+        } else {
+            let mut value = std::f64::INFINITY;
+            for m in MoveGen::new_legal(board) {
+                let mut temp_board = board.clone();
+                board.make_move(m, &mut temp_board);
+
+                value = value.min(self.evaluate_nonterminal_ab_pruned(&temp_board, depth - 1, beta, alpha));
+                if value <= *alpha {
+                    break;
+                }
+                *beta = beta.min(value);
+            }
+
+            return value;
+        }
+    }
+
+    fn evaluate_nonterminal(&mut self, board: &Board, depth: u8) -> f64 {
+        match self.pruning_type {
+            PruningType::None => self.evaluate_nonterminal_unpruned(board, depth),
+            PruningType::AlphaBeta => {
+                let mut alpha = std::f64::NEG_INFINITY;
+                let mut beta = std::f64::INFINITY;
+
+                self.evaluate_nonterminal_ab_pruned(board, depth, &mut alpha, &mut beta)
+            }
+        }
     }
 
     /// Public interface to the `evaluate_nonterminal` function.
     pub fn evaluate_board(&mut self, board: &Board) -> f64 {
-        if self.uses_pruning {
-            self.evaluate_nonterminal_pruned(board, self.search_depth)
-        } else {
-            self.evaluate_nonterminal(board, self.search_depth)
-        }
+        self.evaluate_nonterminal(board, self.search_depth)
     }
 
     /// Return the best move for a given board.
