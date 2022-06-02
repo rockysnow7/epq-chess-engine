@@ -174,6 +174,8 @@ impl Engine {
         }
     }
 
+    /// Return the evaluation of a non-terminal node, using the appropriate pruning
+    /// algorithm (`self.pruning_type`).
     fn evaluate_nonterminal(&mut self, board: &Board, depth: u8) -> f64 {
         match self.pruning_type {
             PruningType::None => self.evaluate_nonterminal_unpruned(board, depth),

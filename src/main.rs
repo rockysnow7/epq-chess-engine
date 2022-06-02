@@ -4,16 +4,8 @@ mod engine;
 mod play;
 
 fn main() {
-    let mut engine_unpruned = engine::Engine::new(0, engine::PruningType::None);
-    let mut engine_ab_pruned = engine::Engine::new(0, engine::PruningType::AlphaBeta);
-    //play::play_game(Color::White, &mut engine);
-    /*for _ in 0..100 {
-        engine.train(100, false);
-    }*/
+    let mut engine_1 = engine::Engine::new(0, engine::PruningType::None);
+    let mut engine_2 = engine::Engine::new(0, engine::PruningType::None);
 
-    let time_unpruned = engine_unpruned.measure_mean_nanos_per_move(1000);
-    println!("Unpruned: {}", time_unpruned);
-
-    let time_ab_pruned = engine_ab_pruned.measure_mean_nanos_per_move(1000);
-    println!("AB pruned: {}", time_ab_pruned);
+    _ = play::play_engines(&mut engine_1, &mut engine_2, true);
 }
