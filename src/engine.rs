@@ -5,6 +5,7 @@ use neuroflow::FeedForward;
 use std::io::Read;
 use serde::{Serialize, Deserialize};
 use indicatif::ProgressBar;
+use std::time::Instant;
 
 const NUM_FEATURES: usize = 65;
 
@@ -216,8 +217,8 @@ impl Engine {
 
     /// Play a game between this engine and itself, and return +1 if white wins, -1 if
     /// black wins, and 0 if it is a draw, along with a vector of the features of each
-    /// position from the game.
-    fn play_self(&mut self, show: bool) -> (i8, Vec<[f64; NUM_FEATURES]>) {
+    /// position from the game, and the mean time per move in nanoseconds.
+    fn play_self(&mut self, show: bool) -> (i8, Vec<[f64; NUM_FEATURES]>, u128) {
         let mut game = Game::new();
         let mut positions = vec![features(&game.current_position())];
 
@@ -226,13 +227,21 @@ impl Engine {
             print_board(&game.current_position());
         }
 
+        let mut sum_nanos_per_move = 0;
+        let mut num_moves = 0;
         while game.result().is_none() {
             if game.can_declare_draw() {
                 game.declare_draw();
             }
 
+            let start_time = Instant::now();
             let best_move = self.best_move(&game.current_position(), show);
+            let time_taken = start_time.elapsed().as_nanos();
+
             game.make_move(best_move);
+
+            num_moves += 1;
+            sum_nanos_per_move += time_taken;
 
             if show {
                 print_board(&game.current_position());
@@ -246,22 +255,22 @@ impl Engine {
             if show {
                 println!("White wins.");
             }
-            return (1, positions);
+            return (1, positions, sum_nanos_per_move / num_moves);
         }
         if result == GameResult::BlackCheckmates || result == GameResult::WhiteResigns {
             if show {
                 println!("Black wins.");
             }
-            return (-1, positions);
+            return (-1, positions, sum_nanos_per_move / num_moves);
         }
 
         if show {
             println!("Draw.");
         }
-        (0, positions)
+        (0, positions, sum_nanos_per_move / num_moves)
     }
 
-    /// Train the engine via self-play, playing the given number of games.
+    /// Trains the engine via self-play, playing the given number of games.
     pub fn train(&mut self, num_games: u32, show: bool) {
         let mut white_wins = 0;
         let mut black_wins = 0;
@@ -271,7 +280,7 @@ impl Engine {
         for _ in 0..num_games {
             pb.inc(1);
 
-            let (winner, features) = self.play_self(show);
+            let (winner, features, _) = self.play_self(show);
             if winner == 1 {
                 white_wins += 1;
             } else if winner == -1 {
@@ -292,5 +301,20 @@ impl Engine {
     pub fn train_and_save(&mut self, num_games: u32, show: bool, filename: &str) {
         self.train(num_games, show);
         self.save(filename);
+    }
+
+    /// Plays `num_games` games against itself, and returns the mean time per
+    /// move in nanoseconds.
+    pub fn measure_mean_nanos_per_move(&mut self, num_games: u128) -> u128 {
+        let mut sum_nanos_per_move = 0;
+        let pb = ProgressBar::new(num_games as u64);
+        for _ in 0..num_games {
+            let (_, _, nanos_per_move) = self.play_self(false);
+            sum_nanos_per_move += nanos_per_move;
+            pb.inc(1);
+        }
+        pb.finish();
+
+        sum_nanos_per_move / num_games
     }
 }

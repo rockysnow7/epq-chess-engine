@@ -1,5 +1,4 @@
 use chess::Color;
-use std::time::{Instant, Duration};
 
 mod engine;
 mod play;
@@ -12,13 +11,9 @@ fn main() {
         engine.train(100, false);
     }*/
 
-    let start = Instant::now();
-    engine_unpruned.train(10, false);
-    let elapsed = start.elapsed();
-    println!("Unpruned: {}s {}ms\n", elapsed.as_secs(), elapsed.as_millis());
+    let time_unpruned = engine_unpruned.measure_mean_nanos_per_move(1000);
+    println!("Unpruned: {}", time_unpruned);
 
-    let start = Instant::now();
-    engine_ab_pruned.train(10, false);
-    let elapsed = start.elapsed();
-    println!("AB pruned: {}s {}ms", elapsed.as_secs(), elapsed.as_millis());
+    let time_ab_pruned = engine_ab_pruned.measure_mean_nanos_per_move(1000);
+    println!("AB pruned: {}", time_ab_pruned);
 }
