@@ -48,6 +48,7 @@ pub fn measure_elo(engine_1: &mut Engine, engine_2: &mut Engine, num_games: u32)
     (rating_1 as u16, rating_2 as u16)
 }
 
-pub fn engine_score(elo_old: f32, elo_new: f32, mean_time_per_move_old: f32, mean_time_per_move_new: f32) -> f32 {
-    (elo_new / elo_old) * (mean_time_per_move_old / mean_time_per_move_new)
+/// Returns the score of an engine relative to a standard engine.
+pub fn engine_score(elo_standard: f32, elo: f32, mean_time_per_move_standard: f32, mean_time_per_move: f32) -> f32 {
+    (elo / elo_standard) * (mean_time_per_move_standard / mean_time_per_move)
 }

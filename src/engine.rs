@@ -273,7 +273,7 @@ impl Engine {
     }
 
     /// Trains the engine via self-play, playing the given number of games.
-    pub fn train(&mut self, num_games: u32, show: bool) {
+    pub fn train_games(&mut self, num_games: u32, show: bool) {
         let mut white_wins = 0;
         let mut black_wins = 0;
         let mut draws = 0;
@@ -299,9 +299,45 @@ impl Engine {
         println!("Training finished.\nWhite wins: {}\nBlack wins: {}\nDraws: {}", white_wins, black_wins, draws);
     }
 
-    /// Trains the engine and then saves it to a file.
-    pub fn train_and_save(&mut self, num_games: u32, show: bool, filename: &str) {
-        self.train(num_games, show);
+    /// Trains the engine via self-play, playing for the given number of seconds.
+    pub fn train_secs(&mut self, secs: u32, show: bool) {
+        let mut white_wins = 0;
+        let mut black_wins = 0;
+        let mut draws = 0;
+
+        let pb = ProgressBar::new(secs as u64);
+        let start_time = Instant::now();
+        while start_time.elapsed().as_secs() < secs as u64 {
+            let inner_start_time = Instant::now();
+
+            let (winner, features, _) = self.play_self(show);
+            if winner == 1 {
+                white_wins += 1;
+            } else if winner == -1 {
+                black_wins += 1;
+            } else if winner == 0 {
+                draws += 1;
+            }
+
+            for i in 0..features.len() {
+                self.eval_nn.fit(&features[i], &[winner as f64]);
+            }
+
+            pb.inc(inner_start_time.elapsed().as_secs() as u64);
+        }
+        pb.finish();
+        println!("Training finished.\nWhite wins: {}\nBlack wins: {}\nDraws: {}", white_wins, black_wins, draws);
+    }
+
+    /// Trains the engine for the given number of games and then saves it to a file.
+    pub fn train_games_and_save(&mut self, num_games: u32, show: bool, filename: &str) {
+        self.train_games(num_games, show);
+        self.save(filename);
+    }
+
+    /// Trains the engine for the given number of seconds and then saves it to a file.
+    pub fn train_secs_and_save(&mut self, secs: u32, show: bool, filename: &str) {
+        self.train_secs(secs, show);
         self.save(filename);
     }
 
