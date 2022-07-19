@@ -65,6 +65,7 @@ fn evaluator_nn() -> FeedForward {
 pub enum PruningType {
     None,
     AlphaBeta,
+    ProbCut,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -142,7 +143,7 @@ impl Engine {
                     -1.0
                 };
         }
-        
+
         if board.side_to_move() == Color::White {
             let mut value = std::f64::NEG_INFINITY;
             for m in MoveGen::new_legal(board) {
@@ -174,6 +175,45 @@ impl Engine {
         }
     }
 
+    /// Return the evaluation of a non-terminal node by the minimax algorithm, with alpha-beta
+    /// pruning and the ProbCut extension.
+    fn evaluate_nonterminal_probcut_pruned(&mut self, board: &Board, depth: u8, alpha: &mut f64, beta: &mut f64) -> f64 {
+        let shallow_search_depth = self.search_depth / 2;
+        const T: f64 = 1.5; // these values taken from paper linked in plan
+        const A: f64 = 1.0;
+        const B: f64 = 0.0;
+        const STDEV: f64 = 0.5;
+
+        if depth == 0 || board.status() != BoardStatus::Ongoing {
+            return self.evaluate_terminal(board)
+                * if board.side_to_move() == Color::White {
+                    1.0
+                } else {
+                    -1.0
+                };
+        }
+
+        if depth == self.search_depth {
+            let mut bound = ((T * STDEV + *beta - B) / A).round();
+            let mut bound_off_one = bound - 1.0;
+            if self.evaluate_nonterminal_probcut_pruned(board, shallow_search_depth, &mut bound, &mut bound_off_one) >= bound {
+                return *beta;
+            }
+
+            let mut bound = ((-T * STDEV + *alpha - B) / A).round();
+            let mut bound_off_one = bound + 1.0;
+            if self.evaluate_nonterminal_probcut_pruned(board, shallow_search_depth, &mut bound, &mut bound_off_one) <= bound {
+                return *alpha;
+            }
+        }
+
+        self.evaluate_nonterminal_ab_pruned(board, depth, alpha, beta)
+    }
+
+    /// Return the evaluation of a non-terminal node by the minimax algorithm, with alpha-beta
+    /// pruning and the null move heuristic extension.
+    fn evaluate_nonterminal_null_move_pruned(&mut self, board: &Board, depth: u8, alpha: &mut f64, beta: &mut f64) -> f64 {}
+
     /// Return the evaluation of a non-terminal node, using the appropriate pruning
     /// algorithm (`self.pruning_type`).
     fn evaluate_nonterminal(&mut self, board: &Board, depth: u8) -> f64 {
@@ -184,7 +224,13 @@ impl Engine {
                 let mut beta = std::f64::INFINITY;
 
                 self.evaluate_nonterminal_ab_pruned(board, depth, &mut alpha, &mut beta)
-            }
+            },
+            PruningType::ProbCut => {
+                let mut alpha = std::f64::NEG_INFINITY;
+                let mut beta = std::f64::INFINITY;
+
+                self.evaluate_nonterminal_probcut_pruned(board, depth, &mut alpha, &mut beta)
+            },
         }
     }
 
